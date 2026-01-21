@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -41,11 +42,12 @@ func main() {
 // runOuter is the main entry point - creates unix socket, launches pasta, receives TUN FD
 func runOuter() {
 	var (
-		hostname = flag.String("hostname", "", "Hostname for Tailscale (default: tsexec-<random>)")
-		authKey  = flag.String("auth-key", "", "Tailscale auth key (or TS_AUTHKEY env var)")
-		verbose  = flag.Bool("verbose", false, "Enable verbose logging")
-		stateDir = flag.String("state-dir", "", "Directory for Tailscale state (default: temp dir)")
-		exitNode = flag.String("exit-node", "", "Use specified exit node for all traffic (hostname or IP)")
+		hostname    = flag.String("hostname", "", "Hostname for Tailscale (default: tsexec-<random>)")
+		authKey     = flag.String("auth-key", "", "Tailscale auth key (or TS_AUTHKEY env var)")
+		authKeyFile = flag.String("auth-key-file", "", "Path to file containing Tailscale auth key")
+		verbose     = flag.Bool("verbose", false, "Enable verbose logging")
+		stateDir    = flag.String("state-dir", "", "Directory for Tailscale state (default: temp dir)")
+		exitNode    = flag.String("exit-node", "", "Use specified exit node for all traffic (hostname or IP)")
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: tsexec [options] <command> [args...]\n\n")
@@ -65,9 +67,14 @@ func runOuter() {
 		*hostname = fmt.Sprintf("tsexec-%d", rand.Intn(10000))
 	}
 
-	// Get auth key from flag or environment
-	if *authKey == "" {
-		*authKey = os.Getenv("TS_AUTHKEY")
+	// Get auth key from file if specified
+	if *authKeyFile != "" {
+		data, err := os.ReadFile(*authKeyFile)
+		if err != nil {
+			log.Fatalf("Failed to read auth key file: %v", err)
+		}
+		key := strings.TrimSpace(string(data))
+		authKey = &key
 	}
 
 	// Set up state directory

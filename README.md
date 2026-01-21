@@ -26,6 +26,7 @@ tsexec [options] -- <command> [args...]
 
 - `-hostname <name>` - Hostname for the Tailscale node (default: tsexec-<random>)
 - `-auth-key <key>` - Tailscale auth key (or set `TS_AUTHKEY` env var)
+- `-auth-key-file <path>` - Path to file containing Tailscale auth key
 - `-state-dir <dir>` - Directory for Tailscale state (default: temp dir)
 - `-exit-node <host>` - Route all traffic through specified exit node
 - `-verbose` - Enable verbose logging
