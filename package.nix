@@ -1,29 +1,33 @@
 {
   lib,
-  buildGoModule,
+  stdenv,
   makeWrapper,
   passt,
+  tailscale,
+  util-linux,
+  coreutils,
 }:
 
-buildGoModule {
+stdenv.mkDerivation {
   pname = "tsexec";
   version = "0.1.0";
 
   src = ./.;
 
-  vendorHash = "sha256-KMPIgX19Hw1MPE1vZXxolOMfbGYJC1gi3jDPtM1pddk=";
-
   nativeBuildInputs = [ makeWrapper ];
 
-  postInstall = ''
+  installPhase = ''
+    runHook preInstall
+    install -Dm755 tsexec $out/bin/tsexec
     wrapProgram $out/bin/tsexec \
-      --prefix PATH : ${lib.makeBinPath [ passt ]}
+      --prefix PATH : ${lib.makeBinPath [ passt tailscale util-linux coreutils ]}
+    runHook postInstall
   '';
 
   meta = with lib; {
     description = "Run commands with all traffic routed through Tailscale";
     homepage = "https://github.com/bouk/tsexec";
-    license = licenses.mit;
+    license = licenses.bsd3;
     platforms = platforms.linux;
   };
 }
