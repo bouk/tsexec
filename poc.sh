@@ -32,6 +32,7 @@ trap cleanup EXIT
 
 # Everything below runs inside pasta namespace
 pasta --config-net -- bash -c '
+    set -e
     STATE_DIR="$1"
     SOCK="$2"
     shift 2
@@ -67,15 +68,15 @@ pasta --config-net -- bash -c '
 
     tailscale --socket="$SOCK" status
 
+    cleanup() {
+        kill $PID 2>/dev/null
+        wait $PID 2>/dev/null || true
+    }
+    trap cleanup EXIT
+
     if [[ ${#CMD_ARGS[@]} -gt 0 ]]; then
         "${CMD_ARGS[@]}"
-        EXITCODE=$?
     else
         bash
-        EXITCODE=$?
     fi
-
-    kill $PID 2>/dev/null
-    wait $PID 2>/dev/null || true
-    exit $EXITCODE
 ' _ "$STATE_DIR" "$SOCK" "${TS_ARGS[@]}" "" "${CMD_ARGS[@]}"
