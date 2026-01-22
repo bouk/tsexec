@@ -1,10 +1,10 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # tsexec: Run commands with traffic routed through Tailscale
 #
 # Usage: tsexec [tailscale up flags] -- [command]
 #
 # Pasta provides CAP_NET_ADMIN in the user namespace, so tailscaled
-# can create a TUN device directly. No FD passing needed.
+# can create a TUN device in the network namespace.
 #
 # Set TSEXEC_VERBOSE=1 for verbose output.
 
@@ -92,8 +92,8 @@ pasta --config-net -- unshare --mount bash -c '
 
     # Unshare into new user namespace and remap to original user
     if [[ ${#CMD_ARGS[@]} -gt 0 ]]; then
-        exec unshare --user --map-user="$CALLER_UID" --map-group="$CALLER_GID" "${CMD_ARGS[@]}"
+        unshare --user --map-user="$CALLER_UID" --map-group="$CALLER_GID" "${CMD_ARGS[@]}"
     else
-        exec unshare --user --map-user="$CALLER_UID" --map-group="$CALLER_GID" "$SHELL"
+        unshare --user --map-user="$CALLER_UID" --map-group="$CALLER_GID" "$SHELL"
     fi
 ' _ "$STATE_DIR" "$CALLER_UID" "$CALLER_GID" "${TS_ARGS[@]}" "" "${CMD_ARGS[@]}"
