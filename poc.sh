@@ -23,7 +23,6 @@ for arg in "$@"; do
 done
 
 STATE_DIR=$(mktemp -d /tmp/pasta-ts.XXXXXX)
-SOCK="$STATE_DIR/tailscaled.sock"
 
 cleanup() {
     rm -rf "$STATE_DIR"
@@ -31,11 +30,10 @@ cleanup() {
 trap cleanup EXIT
 
 # Everything below runs inside pasta namespace
-pasta --config-net -- bash -c '
+pasta --config-net -- unshare --mount bash -c '
     set -e
     STATE_DIR="$1"
-    SOCK="$2"
-    shift 2
+    shift
 
     # Split remaining args - TS_ARGS until empty string marker, then CMD_ARGS
     TS_ARGS=()
@@ -51,22 +49,26 @@ pasta --config-net -- bash -c '
         fi
     done
 
-    tailscaled --statedir="$STATE_DIR" --socket="$SOCK" &
+    # Mount tmpfs at /var/run/tailscale so tailscaled can use default socket path
+    mkdir -p /var/run/tailscale
+    mount -t tmpfs tmpfs /var/run/tailscale
+
+    tailscaled --statedir="$STATE_DIR" &
     PID=$!
 
     for i in {1..100}; do
-        [[ -S "$SOCK" ]] && break
+        [[ -S /var/run/tailscale/tailscaled.sock ]] && break
         sleep 0.1
     done
 
-    if [[ ! -S "$SOCK" ]]; then
+    if [[ ! -S /var/run/tailscale/tailscaled.sock ]]; then
         echo "ERROR: tailscaled socket not ready"
         exit 1
     fi
 
-    tailscale --socket="$SOCK" up "${TS_ARGS[@]}"
+    tailscale up "${TS_ARGS[@]}"
 
-    tailscale --socket="$SOCK" status
+    tailscale status
 
     cleanup() {
         kill $PID 2>/dev/null
@@ -79,4 +81,4 @@ pasta --config-net -- bash -c '
     else
         bash
     fi
-' _ "$STATE_DIR" "$SOCK" "${TS_ARGS[@]}" "" "${CMD_ARGS[@]}"
+' _ "$STATE_DIR" "${TS_ARGS[@]}" "" "${CMD_ARGS[@]}"
