@@ -1,12 +1,18 @@
 #!/bin/bash
-# POC: Run normal tailscaled inside pasta namespace
+# tsexec: Run commands with traffic routed through Tailscale
 #
-# Usage: ./poc.sh [tailscale up flags] -- [command]
+# Usage: tsexec [tailscale up flags] -- [command]
 #
 # Pasta provides CAP_NET_ADMIN in the user namespace, so tailscaled
 # can create a TUN device directly. No FD passing needed.
+#
+# Set TSEXEC_VERBOSE=1 for verbose output.
 
 set -e
+
+# Capture caller's UID/GID before entering namespace
+CALLER_UID=$(id -u)
+CALLER_GID=$(id -g)
 
 # Split args at --
 TS_ARGS=()
@@ -22,7 +28,7 @@ for arg in "$@"; do
     fi
 done
 
-STATE_DIR=$(mktemp -d /tmp/pasta-ts.XXXXXX)
+STATE_DIR=$(mktemp -d /tmp/tsexec.XXXXXX)
 
 cleanup() {
     rm -rf "$STATE_DIR"
@@ -33,7 +39,10 @@ trap cleanup EXIT
 pasta --config-net -- unshare --mount bash -c '
     set -e
     STATE_DIR="$1"
-    shift
+    CALLER_UID="$2"
+    CALLER_GID="$3"
+    VERBOSE="${TSEXEC_VERBOSE:-}"
+    shift 3
 
     # Split remaining args - TS_ARGS until empty string marker, then CMD_ARGS
     TS_ARGS=()
@@ -53,7 +62,12 @@ pasta --config-net -- unshare --mount bash -c '
     mkdir -p /var/run/tailscale
     mount -t tmpfs tmpfs /var/run/tailscale
 
-    tailscaled --statedir="$STATE_DIR" &
+    # Start tailscaled, redirect logs unless verbose
+    if [[ -n "$VERBOSE" ]]; then
+        tailscaled --statedir="$STATE_DIR" &
+    else
+        tailscaled --statedir="$STATE_DIR" >/dev/null 2>&1 &
+    fi
     PID=$!
 
     for i in {1..100}; do
@@ -68,7 +82,7 @@ pasta --config-net -- unshare --mount bash -c '
 
     tailscale up "${TS_ARGS[@]}"
 
-    tailscale status
+    [[ -n "$VERBOSE" ]] && tailscale status
 
     cleanup() {
         kill $PID 2>/dev/null
@@ -76,9 +90,10 @@ pasta --config-net -- unshare --mount bash -c '
     }
     trap cleanup EXIT
 
+    # Unshare into new user namespace and remap to original user
     if [[ ${#CMD_ARGS[@]} -gt 0 ]]; then
-        "${CMD_ARGS[@]}"
+        exec unshare --user --map-user="$CALLER_UID" --map-group="$CALLER_GID" "${CMD_ARGS[@]}"
     else
-        bash
+        exec unshare --user --map-user="$CALLER_UID" --map-group="$CALLER_GID" "$SHELL"
     fi
-' _ "$STATE_DIR" "${TS_ARGS[@]}" "" "${CMD_ARGS[@]}"
+' _ "$STATE_DIR" "$CALLER_UID" "$CALLER_GID" "${TS_ARGS[@]}" "" "${CMD_ARGS[@]}"
