@@ -1,11 +1,10 @@
 #!/bin/bash
-# POC: Run tailscaled with real TUN inside pasta namespace
+# POC: Run normal tailscaled inside pasta namespace
 #
-# Usage: TS_AUTHKEY=tskey-xxx ./poc-tun.sh [command]
+# Usage: TS_AUTHKEY=tskey-xxx ./poc.sh [command]
 #
-# In a pasta namespace, we have CAP_NET_ADMIN in the user namespace,
-# so tailscaled should be able to create a TUN device directly.
-# This means traffic actually flows through the TUN and tailscale handles routing.
+# Pasta provides CAP_NET_ADMIN in the user namespace, so tailscaled
+# can create a TUN device directly. No FD passing needed.
 
 set -e
 
